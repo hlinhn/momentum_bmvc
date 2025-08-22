@@ -1,6 +1,7 @@
-@inproceedings{author20XXtitle,
-  title={Please cite me},
-  author={Author, First and Author, Second and Author, Third},
-  booktitle={Conference},
-  year={20XX}
+@inproceedings{nguyen2025_body_momentum_bmvc,
+  title={Improving Human Motion Plausibility with Body Momentum},
+  author={Ha Linh Nguyen and Elden Tse and Angela Yao},
+  booktitle = {36th British Machine Vision Conference 2025, {BMVC} 2025, Sheffield, UK, November 24-27, 2025},
+  publisher = {BMVA},
+  year      = {2025},
 }
