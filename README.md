@@ -33,3 +33,4 @@ If you find this code useful for your research please consider citing the follow
 ```
 
 ## Acknowledgments
+This repository is built upon [GLAMR](https://github.com/NVlabs/GLAMR).
