@@ -5,9 +5,19 @@
 
 ## Installation instructions
 
+Clone the repository and install the requirements.
+```
+conda create -n momentum python=3.9
+conda env create -f environment.yml
+```
 ## Run evaluation
 
 ## Run training code
+
+## TODO
+- [x] Release code for momentum calculation
+- [ ] Release code for GLAMR training and evaluation
+- [ ] Release code for WHAM training and evaluation
 
 ## Citing
 If you find this code useful for your research please consider citing the following paper:

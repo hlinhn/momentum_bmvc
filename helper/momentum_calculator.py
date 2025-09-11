@@ -246,9 +246,8 @@ def calculate_part_rotation(rot_mats, parents, upright=False):
 
 
 class MomentumCalculator(nn.Module):
-    def __init__(self, num_iter=100, to_cuda=False, smplh=False):
+    def __init__(self, to_cuda=False, smplh=False):
         super().__init__()
-        self.num_iter = num_iter
         if not smplh:
             model_path = SMPL_PATH
             self.smpl_model = SMPL(model_path)
