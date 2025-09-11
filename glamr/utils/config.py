@@ -13,7 +13,7 @@ class Config:
     def __init__(self, cfg_id, tmp=False, training=True):
         self.id = cfg_id
         self.training = training
-        cfg_path = 'traj_pred/cfg/**/%s.yml' % cfg_id
+        cfg_path = 'cfg/**/%s.yml' % cfg_id
         files = glob.glob(cfg_path, recursive=True)
         assert(len(files) == 1)
         self.yml_dict = yml_dict = yaml.safe_load(open(files[0], 'r'))

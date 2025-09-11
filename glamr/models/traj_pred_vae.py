@@ -388,7 +388,7 @@ Main Model
 
 class TrajPredVAE(pl.LightningModule):
 
-    def __init__(self, cfg, args):
+    def __init__(self, cfg):
         super().__init__()
         self.model_type = 'joint'
         self.stochastic = True
@@ -399,8 +399,7 @@ class TrajPredVAE(pl.LightningModule):
         self.loss_names = list(self.loss_cfg.keys())
         """ netorks """
         self.setup_networks()
-        self.args = args
- 
+
     def setup_networks(self):
         self.specs = specs = self.cfg.model_specs
         self.nz = specs['nz']

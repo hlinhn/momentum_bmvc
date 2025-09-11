@@ -23,123 +23,127 @@ import time
 from easydict import EasyDict as edict
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--cfg', default=None)
-parser.add_argument('--tmp', action='store_true', default=False)
-parser.add_argument('--ngpus', type=int, default=1)
-parser.add_argument('--gpu_ids', default=None)
-parser.add_argument('--nworkers', type=int, default=8)
-parser.add_argument('--precision', type=int, default=32)
-parser.add_argument('--max_epochs', type=int, default=None)
-parser.add_argument('--save_n_epochs', type=int, default=None)
-parser.add_argument('--debug', action='store_true', default=False)
-parser.add_argument('--resume', action='store_true', default=False)
-parser.add_argument('--version', type=int, default=None)
-parser.add_argument('--cp', default='last')
-parser.add_argument('--profiler', default=None)
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--cfg', default=None)
+    parser.add_argument('--tmp', action='store_true', default=False)
+    parser.add_argument('--ngpus', type=int, default=1)
+    parser.add_argument('--gpu_ids', default=None)
+    parser.add_argument('--nworkers', type=int, default=8)
+    parser.add_argument('--precision', type=int, default=32)
+    parser.add_argument('--max_epochs', type=int, default=None)
+    parser.add_argument('--save_n_epochs', type=int, default=None)
+    parser.add_argument('--debug', action='store_true', default=False)
+    parser.add_argument('--resume', action='store_true', default=False)
+    parser.add_argument('--version', type=int, default=None)
+    parser.add_argument('--cp', default='last')
+    parser.add_argument('--profiler', default=None)
 
-parser.add_argument('--mute', default=False)
-parser.add_argument('--fast_dev_run', default=False)
-parser.add_argument('--load_ckpt', default="")
-parser.add_argument('--project', default="glamr")
-parser.add_argument('--infer_ckpt', default="")
-parser.add_argument('--exp_key', default="with_am")
-args = parser.parse_args()
-
-process_rank = int(os.environ['LOCAL_RANK']) if 'LOCAL_RANK' in os.environ.keys() else -1
-gpu_rank = max(process_rank, 0)
-logger.info(f"Config: {args.cfg}")
-cfg = Config(args.cfg, tmp=args.tmp, training=True)
-seed_everything(cfg.seed, workers=False)
-if args.ngpus > 1:
-    cfg.batch_size //= args.ngpus
-    # cfg.lr *= args.ngpus      # only necessary when loss is proportional to batch size
-gpu_ids = None if args.gpu_ids is None else [int(x) for x in args.gpu_ids.split(',')]
-
-# additional setup for debugging and speed optimization
-if args.debug:
-    torch.autograd.set_detect_anomaly(True)
-torch.set_default_dtype(torch.float32)
-
-# train datasets
-train_dataset = AMASSDataset(cfg.amass_dir, 'train', cfg, seq_len=cfg.seq_len, ntime_per_epoch=cfg.train_ntime_per_epoch)
-train_dataloader = DataLoader(train_dataset, batch_size=cfg.batch_size, num_workers=args.nworkers, pin_memory=True, worker_init_fn=worker_init_fn, drop_last=True)
-# val datasets
-val_dataset = AMASSDataset(cfg.amass_dir, 'test', cfg, seq_len=cfg.seq_len, ntime_per_epoch=cfg.val_ntime_per_epoch)
-val_dataloader = DataLoader(val_dataset, batch_size=cfg.batch_size, num_workers=args.nworkers, pin_memory=True, worker_init_fn=worker_init_fn, drop_last=True)
-# model
-
-comet_args = edict(vars(args))
-comet_args.rank = process_rank
-api_key = os.environ["COMET_API_KEY"]
-workspace = os.environ["COMET_WORKSPACE"]
-
-traj_predictor = model_dict[cfg.model_name](cfg, comet_args)
+    parser.add_argument('--mute', default=False)
+    parser.add_argument('--fast_dev_run', default=False)
+    parser.add_argument('--load_ckpt', default="")
+    parser.add_argument('--infer_ckpt', default="")
+    parser.add_argument('--disable_comet', action='store_true', default=False)
+    parser.add_argument('--project', default="glamr")
+    parser.add_argument('--exp_key', default="with_am")
+    args = parser.parse_args()
+    return args
 
 
-# logger
-if args.resume:
-    version = find_last_version(cfg.cfg_dir) if args.version is None else args.version
-else:
-    version = None
-max_epochs = cfg.max_epochs if args.max_epochs is None else args.max_epochs
+def train(args):
+    process_rank = int(os.environ['LOCAL_RANK']) if 'LOCAL_RANK' in os.environ.keys() else -1
+    gpu_rank = max(process_rank, 0)
+    logger.info(f"Config: {args.cfg}")
+    cfg = Config(args.cfg, tmp=args.tmp, training=True)
+    seed_everything(cfg.seed, workers=False)
+    if args.ngpus > 1:
+        cfg.batch_size //= args.ngpus
+        # cfg.lr *= args.ngpus      # only necessary when loss is proportional to batch size
+    gpu_ids = None if args.gpu_ids is None else [int(x) for x in args.gpu_ids.split(',')]
 
+    # additional setup for debugging and speed optimization
+    if args.debug:
+        torch.autograd.set_detect_anomaly(True)
+    torch.set_default_dtype(torch.float32)
 
-if process_rank == -1:
-    # only the main process does logging
-    tb_logger = TensorBoardLogger(f'{cfg.cfg_dir}', version=version, name='')
-    version = tb_logger.version
-    text_logger = TextLogger(f'{tb_logger.log_dir}/logs/log.txt', cfg=cfg, max_epochs=max_epochs)
-    checkpoint_dir = f'{tb_logger.log_dir}/checkpoints'
-    comet_logger = CometLogger(
-        api_key=api_key,
-        workspace=workspace,
-        project_name=comet_args.project,
-        experiment_name=comet_args.exp_key
-    )
-    loggers = [tb_logger, comet_logger]
-else:
-    # child processes
+    # train datasets
+    train_dataset = AMASSDataset(cfg.amass_dir, 'train', cfg, seq_len=cfg.seq_len, ntime_per_epoch=cfg.train_ntime_per_epoch)
+    train_dataloader = DataLoader(train_dataset, batch_size=cfg.batch_size, num_workers=args.nworkers, pin_memory=True, worker_init_fn=worker_init_fn, drop_last=True)
+    # val datasets
+    val_dataset = AMASSDataset(cfg.amass_dir, 'test', cfg, seq_len=cfg.seq_len, ntime_per_epoch=cfg.val_ntime_per_epoch)
+    val_dataloader = DataLoader(val_dataset, batch_size=cfg.batch_size, num_workers=args.nworkers, pin_memory=True, worker_init_fn=worker_init_fn, drop_last=True)
+    # model
+    traj_predictor = model_dict[cfg.model_name](cfg)
+
+    # logger
     if args.resume:
-        checkpoint_dir = f'{cfg.cfg_dir}/version_{version}/checkpoints' # used only when resuming training
+        version = find_last_version(cfg.cfg_dir) if args.version is None else args.version
     else:
-        checkpoint_dir = tempfile.mkdtemp()
-    loggers = None
-print(f'process: {process_rank}, checkpoint_dir: {checkpoint_dir}')
+        version = None
+    max_epochs = cfg.max_epochs if args.max_epochs is None else args.max_epochs
 
-checkpoint_epoch_cb = ModelCheckpoint(
-    monitor='val_loss',
-    dirpath=checkpoint_dir,
-    filename='model-{epoch:04d}',
-    save_last=False,
-    save_top_k=-1,
-    mode='min',
-    every_n_epochs=cfg.save_n_epochs if args.save_n_epochs is None else args.save_n_epochs
-)
-checkpoint_best_cb = ModelCheckpoint(
-    monitor='val_loss',
-    dirpath=checkpoint_dir,
-    filename='model-best-{epoch:04d}',
-    save_last=True,
-    save_top_k=1,
-    mode='min'
-)
-callbacks = [checkpoint_epoch_cb, checkpoint_best_cb]
+    if process_rank == -1:
+        # only the main process does logging
+        tb_logger = TensorBoardLogger(f'{cfg.cfg_dir}', version=version, name='')
+        version = tb_logger.version
+        checkpoint_dir = f'{tb_logger.log_dir}/checkpoints'
+        loggers = [tb_logger]
+        if not args.disable_comet:
+            api_key = os.environ.get('COMET_API_KEY')
+            workspace = os.environ.get('COMET_WORKSPACE')
+            comet_logger = CometLogger(
+                api_key=api_key,
+                workspace=workspace,
+                project_name=args.project,
+                experiment_name=args.exp_key
+            )
+            loggers = [tb_logger, comet_logger]
+    else:
+        # child processes
+        if args.resume:
+            checkpoint_dir = f'{cfg.cfg_dir}/version_{version}/checkpoints' # used only when resuming training
+        else:
+            checkpoint_dir = tempfile.mkdtemp()
+        loggers = None
+    print(f'process: {process_rank}, checkpoint_dir: {checkpoint_dir}')
 
-resume_cp = get_checkpoint_path(checkpoint_dir, args.cp) if args.resume else None
+    checkpoint_epoch_cb = ModelCheckpoint(
+        monitor='val_loss',
+        dirpath=checkpoint_dir,
+        filename='model-{epoch:04d}',
+        save_last=False,
+        save_top_k=-1,
+        mode='min',
+        every_n_epochs=cfg.save_n_epochs if args.save_n_epochs is None else args.save_n_epochs
+    )
+    checkpoint_best_cb = ModelCheckpoint(
+        monitor='val_loss',
+        dirpath=checkpoint_dir,
+        filename='model-best-{epoch:04d}',
+        save_last=True,
+        save_top_k=1,
+        mode='min'
+    )
+    callbacks = [checkpoint_epoch_cb, checkpoint_best_cb]
 
-# trainer
-trainer = pl.Trainer(
-    logger=loggers,
-    callbacks=callbacks,
-    devices=args.ngpus,
-    accelerator='gpu',
-    strategy='ddp',
-    precision=args.precision,
-    resume_from_checkpoint=resume_cp,
-    max_epochs=max_epochs,
-    profiler=args.profiler,
-    gradient_clip_val=cfg.gradient_clip_val
-)
-trainer.fit(traj_predictor, train_dataloader, val_dataloader)
+    resume_cp = get_checkpoint_path(checkpoint_dir, args.cp) if args.resume else None
 
+    # trainer
+    trainer = pl.Trainer(
+        logger=loggers,
+        callbacks=callbacks,
+        devices=args.ngpus,
+        accelerator='gpu',
+        strategy='ddp',
+        precision=args.precision,
+        resume_from_checkpoint=resume_cp,
+        max_epochs=max_epochs,
+        profiler=args.profiler,
+        gradient_clip_val=cfg.gradient_clip_val
+    )
+    trainer.fit(traj_predictor, train_dataloader, val_dataloader)
+
+
+if __name__ == '__main__':
+    args = parse_args()
+    train(args)
