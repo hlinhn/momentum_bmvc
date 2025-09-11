@@ -3,20 +3,12 @@
 > Code repository for the paper:  
 > [**Improving Human Motion Plausibility with Body Momentum**]()
 
-## Installation instructions
-
-Clone the repository and install the requirements.
-```
-conda create -n momentum python=3.9
-conda env create -f environment.yml
-```
-## Run evaluation
-
-## Run training code
+## Instructions
+Check out instructions in each subfolder.
 
 ## TODO
 - [x] Release code for momentum calculation
-- [ ] Release code for GLAMR training and evaluation
+- [x] Release code for GLAMR training and evaluation
 - [ ] Release code for WHAM training and evaluation
 
 ## Citing
