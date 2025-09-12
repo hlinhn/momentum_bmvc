@@ -26,12 +26,12 @@ Check out instructions in each subfolder.
 - [ ] Release code for WHAM training and evaluation
 
 ## Citation
-If you find this code useful for your research please consider citing the following paper:
+If you find this code useful for your research, please consider citing the following paper:
 
 ```bibtex
 @inproceedings{nguyen2025_body_momentum_bmvc,
   title={Improving Human Motion Plausibility with Body Momentum},
-  author={Ha Linh Nguyen and Tze Ho Elden Tse and Angela Yao},
+  author={Nguyen, Ha Linh and Tse, Tze Ho Elden and Yao, Angela},
   booktitle = {36th British Machine Vision Conference 2025, {BMVC} 2025, Sheffield, UK, November 24-27, 2025},
   publisher = {BMVA},
   year      = {2025},
