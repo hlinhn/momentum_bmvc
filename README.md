@@ -1,7 +1,7 @@
 # Improving Human Motion Plausibility with Body Momentum [BMVC 2025]
 
 > Code repository for the paper:  
-> [**Improving Human Motion Plausibility with Body Momentum**]()
+> [**Improving Human Motion Plausibility with Body Momentum**](https://arxiv.org/abs/2509.09496)
 
 ## Instructions
 Check out instructions in each subfolder.
