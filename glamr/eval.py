@@ -46,11 +46,7 @@ def run_checkpoint(checkpoint, saved_file, dataset):
     test_result = {}
     save_keys =  ['infer_out_orient_q_tp', 
                   'infer_out_trans_tp',
-                  'infer_out_swing_q_tp',
-                  'infer_out_twist_tp',
-                  'swing_q_tp',
-                  'twist_tp', 'pose',
-                  'context', 'orient_q_tp', 'trans_tp',
+                  'pose', 'orient_q_tp', 'trans_tp',
                   'eff_seq_len', 'idx']
     for i, batch in enumerate(tqdm(dataloader)):
         batch = tensor_to(batch, device)
@@ -61,7 +57,6 @@ def run_checkpoint(checkpoint, saved_file, dataset):
                 saved_output[k] = output[k].detach().cpu()
         for k in ['seq_name', 'seq_ind']:
             saved_output[k] = output[k]
-        saved_output['z'] = output['p_z_dist_infer'].mu.detach().cpu()
         test_result[i] = saved_output
     with open(saved_file, 'wb') as f:
         pickle.dump(test_result, f)
