@@ -169,31 +169,102 @@ class AMASSDataset(Dataset):
         return self.random_sample(idx)
 
 
-if __name__ == "__main__":
+class EMDBDataset(Dataset):
+    def __init__(self, dataset_dir, seq_len=100, blend=0.0):
+        self.data_file = pickle.load(open(f'{dataset_dir}/emdb.pkl', 'rb'))
+        self.seq_len = seq_len
+        self.seq_lengths = np.array([x.shape[0] for x in self.data_file.values()])
+        self.len_idx = [np.ceil(x // self.seq_len).astype(int) for x in self.seq_lengths]
+        self.len_cs = np.cumsum([0] + self.len_idx)
+        self.seq_keys = list(self.data_file.keys())
+        self.blend = blend
 
-    np.random.seed(0)
-    torch.manual_seed(0)
-    amass_dir = 'datasets/amass_processed/v5'
+    def __len__(self):
+        return self.len_cs[-1]
+    
+    def __getitem__(self, idx):
+        if idx != 0:
+            seq_id = np.searchsorted(self.len_cs, idx) - 1
+            idx_in_seq = (idx - self.len_cs[seq_id] - 1) * self.seq_len
+        else:
+            seq_id = 0
+            idx_in_seq = 0
+        motion_key = self.seq_keys[seq_id]
+        seq_data = self.data_file[motion_key]
 
-    dataset = AMASSDataset(amass_dir, 'test', seq_len=100)
+        if idx_in_seq + self.seq_len <= self.seq_lengths[seq_id]:
+            append = 0
+            frame_loss_mask = np.ones((self.seq_len, 1)).astype(np.float32)
+            eff_seq_len = self.seq_len   # effective seq
+        else:
+            eff_seq_len = self.seq_lengths[seq_id] - idx_in_seq  # effective seq
+            append = self.seq_len - eff_seq_len
+            frame_loss_mask = np.zeros((self.seq_len, 1)).astype(np.float32)
+            frame_loss_mask[:eff_seq_len] = 1.0
 
-    batch_size = 5
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0)
-    batch = next(iter(dataloader))
-    print(batch.keys())
-    B, T, _ = batch["joint_pos_shape"].shape
-    joint_pos = batch["joint_pos_shape"]
-    with_gt = angle_axis_to_rotation_matrix(batch['pose'][:, :, :3])
-    with_gt = with_gt.unsqueeze(-3).expand(-1, -1, 23, -1, -1)
-    rotated_joint = torch.bmm(
-        with_gt.reshape(-1, 3, 3),
-        joint_pos.reshape(-1, 3, 1)
-    ).reshape(B, T, -1)
-    with_zero = torch.concatenate([torch.zeros(B, T, 3).to(joint_pos.device), rotated_joint], dim=-1).reshape(B, T, -1, 3)
-    with_trans = with_zero + batch['trans'].unsqueeze(-2)
-    pred_jitter = torch.norm(
-        (with_trans[:, 3:] - 3 * with_trans[:, 2:-1] + 3 * with_trans[:, 1:-2] - with_trans[:, :-3]) * (30**3),
-        dim=2,
-    ).mean(dim=-1) / 10.0
+        seq_data = get_seq(seq_data, idx_in_seq, self.seq_len, append)
+        
+        data = {
+            'trans': seq_data[:, :3],
+            'pose': seq_data[:, 3:75],
+            'shape': seq_data[:, 75:],
+            'seq_name': motion_key,
+            'frame_loss_mask': frame_loss_mask,
+            'eff_seq_len': eff_seq_len,
+            'seq_ind': motion_key,
+            'idx': idx_in_seq,
+        }
+        return data
 
-    print(pred_jitter.mean())
+
+class AMASSEvalDataset(Dataset):
+    def __init__(self, dataset_dir, split, seq_len=100):
+        self.data_file = h5py.File(f"{dataset_dir}/amass_{split}.h5", "r")
+        self.jpos_file = h5py.File(f"{dataset_dir}/amass_{split}_jpos.h5", "r")
+        self.seq_len = seq_len
+        self.seq_lengths = np.array([x.shape[0] for x in self.data_file.values()])
+        self.len_idx = [np.ceil(x // self.seq_len).astype(int) for x in self.seq_lengths]
+        self.len_cs = np.cumsum([0] + self.len_idx)
+        self.seq_keys = list(self.data_file.keys())
+
+    def __len__(self):
+        return self.len_cs[-1]
+    
+    def __getitem__(self, idx):
+        if idx != 0:
+            seq_id = np.searchsorted(self.len_cs, idx) - 1
+            idx_in_seq = (idx - self.len_cs[seq_id] - 1) * self.seq_len
+        else:
+            seq_id = 0
+            idx_in_seq = 0
+        motion_key = self.seq_keys[seq_id]
+        seq_jpos, seq_jpos_noshape = self.jpos_file.get(motion_key)
+        seq_data = self.data_file.get(motion_key)
+
+        if idx_in_seq + self.seq_len <= self.seq_lengths[seq_id]:
+            append = 0
+            frame_loss_mask = np.ones((self.seq_len, 1)).astype(np.float32)
+            eff_seq_len = self.seq_len   # effective seq
+        else:
+            eff_seq_len = self.seq_lengths[seq_id] - idx_in_seq  # effective seq
+            append = self.seq_len - eff_seq_len
+            frame_loss_mask = np.zeros((self.seq_len, 1)).astype(np.float32)
+            frame_loss_mask[:eff_seq_len] = 1.0
+
+        seq_data = get_seq(seq_data, idx_in_seq, self.seq_len, append)
+        jpos = get_seq(seq_jpos, idx_in_seq, self.seq_len, append)
+        jpos_noshape = get_seq(seq_jpos_noshape, idx_in_seq, self.seq_len, append)
+        
+        data = {
+            'trans': seq_data[:, :3],
+            'pose': seq_data[:, 3:75],
+            'shape': seq_data[:, 75:],
+            'seq_name': motion_key,
+            'frame_loss_mask': frame_loss_mask,
+            'eff_seq_len': eff_seq_len,
+            'joint_pos_shape': jpos[:, 1:, :].reshape(jpos.shape[0], -1),
+            'joint_pos_noshape': jpos_noshape[:, 1:, :].reshape(jpos_noshape.shape[0], -1),
+            'seq_ind': motion_key,
+            'idx': idx_in_seq,
+        }
+        return data
